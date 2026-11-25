@@ -1,0 +1,101 @@
+name: Build NOW (Android + iOS)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Format, analyze, test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: now_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: now_app.zip
+          sparse-checkout-cone-mode: false
+      - name: Unzip project
+        working-directory: .
+        run: unzip -q now_app.zip
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: now_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: now_app.zip
+          sparse-checkout-cone-mode: false
+      - name: Unzip project
+        working-directory: .
+        run: unzip -q now_app.zip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform folder
+        run: |
+          if [ ! -d android ]; then
+            flutter create --platforms=android --project-name now_app \
+              --org com.example.now "$RUNNER_TEMP/scaffold"
+            cp -r "$RUNNER_TEMP/scaffold/android" android
+          fi
+      - run: flutter pub get
+      - run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: now-android-debug-apk
+          path: now_app/build/app/outputs/flutter-apk/app-debug.apk
+
+  ios:
+    name: iOS unsigned build
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: now_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: now_app.zip
+          sparse-checkout-cone-mode: false
+      - name: Unzip project
+        working-directory: .
+        run: unzip -q now_app.zip
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate iOS platform folder
+        run: |
+          if [ ! -d ios ]; then
+            flutter create --platforms=ios --project-name now_app \
+              --org com.example.now "$RUNNER_TEMP/scaffold"
+            cp -r "$RUNNER_TEMP/scaffold/ios" ios
+          fi
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign
+      - uses: actions/upload-artifact@v4
+        with:
+          name: now-ios-unsigned-app
+          path: now_app/build/ios/iphoneos/Runner.app
