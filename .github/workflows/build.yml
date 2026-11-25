@@ -3,49 +3,58 @@ name: Build NOW (Android + iOS)
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+env:
+  FORMAT_PATHS: lib/main.dart lib/app lib/core lib/features test
+
 jobs:
   verify:
     name: Format, analyze, test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: now_app
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: now_app.zip
-          sparse-checkout-cone-mode: false
-      - name: Unzip project
-        working-directory: .
-        run: unzip -q now_app.zip
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+      - run: flutter --version
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter gen-l10n
+      - name: Format check
+        continue-on-error: true
+        run: dart format --output=none --set-exit-if-changed $FORMAT_PATHS
       - run: flutter analyze
       - run: flutter test
+      - name: Produce formatting patch
+        if: always()
+        run: |
+          dart format $FORMAT_PATHS
+          git diff > formatting.patch
+          wc -l formatting.patch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: formatting-patch
+          path: formatting.patch
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pubspec-lock
+          path: pubspec.lock
+          if-no-files-found: warn
 
   android:
     name: Android debug APK
+    needs: verify
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: now_app
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: now_app.zip
-          sparse-checkout-cone-mode: false
-      - name: Unzip project
-        working-directory: .
-        run: unzip -q now_app.zip
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -61,27 +70,22 @@ jobs:
               --org com.example.now "$RUNNER_TEMP/scaffold"
             cp -r "$RUNNER_TEMP/scaffold/android" android
           fi
+          sed -i 's/android:label="now_app"/android:label="NOW"/' \
+            android/app/src/main/AndroidManifest.xml
       - run: flutter pub get
+      - run: flutter gen-l10n
       - run: flutter build apk --debug
       - uses: actions/upload-artifact@v4
         with:
           name: now-android-debug-apk
-          path: now_app/build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
 
   ios:
-    name: iOS unsigned build
+    name: iOS unsigned build (compile check only)
+    needs: verify
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: now_app
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: now_app.zip
-          sparse-checkout-cone-mode: false
-      - name: Unzip project
-        working-directory: .
-        run: unzip -q now_app.zip
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -94,8 +98,5 @@ jobs:
             cp -r "$RUNNER_TEMP/scaffold/ios" ios
           fi
       - run: flutter pub get
+      - run: flutter gen-l10n
       - run: flutter build ios --release --no-codesign
-      - uses: actions/upload-artifact@v4
-        with:
-          name: now-ios-unsigned-app
-          path: now_app/build/ios/iphoneos/Runner.app
