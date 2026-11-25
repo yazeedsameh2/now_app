@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Unzip project
+        run: unzip -q -o now_app.zip
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -33,6 +35,7 @@ jobs:
       - name: Produce formatting patch
         if: always()
         run: |
+          git add -A
           dart format $FORMAT_PATHS
           git diff > formatting.patch
           wc -l formatting.patch
@@ -55,6 +58,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Unzip project
+        run: unzip -q -o now_app.zip
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -86,6 +91,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Unzip project
+        run: unzip -q -o now_app.zip
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
