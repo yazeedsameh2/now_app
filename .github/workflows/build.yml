@@ -111,9 +111,15 @@ jobs:
           cache: true
       - name: Generate Android platform folder
         run: |
-          if [ ! -d android ]; then
+          # The source archive may contain only notification resource files
+          # under android/, which is not a complete Flutter Android project.
+          # Check for the actual Gradle app file, not merely the directory.
+          if [ ! -f android/app/build.gradle.kts ] && [ ! -f android/app/build.gradle ]; then
+            rm -rf android "$RUNNER_TEMP/scaffold"
             flutter create --platforms=android --project-name now_app \
               --org com.example.now "$RUNNER_TEMP/scaffold"
+            test -f "$RUNNER_TEMP/scaffold/android/app/build.gradle.kts" -o \
+                 -f "$RUNNER_TEMP/scaffold/android/app/build.gradle"
             cp -r "$RUNNER_TEMP/scaffold/android" android
           fi
       - name: Show Android toolchain (for diagnosis)
